@@ -61,9 +61,6 @@ PARTIAL_SYNC_STATE: Dict[str, dict] = {}
 PARTIAL_SYNC_LOCK = threading.Lock()
 HISTORY_SYNC_STATE: Dict[str, dict] = {}
 HISTORY_SYNC_LOCK = threading.Lock()
-SNAPSHOT_FILE_CACHE: Dict[str, dict] = {}
-SNAPSHOT_ALL_CACHE: dict = {"signature": None, "snapshots": []}
-SNAPSHOT_CACHE_LOCK = threading.Lock()
 
 
 def ensure_dirs() -> None:
@@ -140,7 +137,13 @@ def current_query_month_yyyymm() -> str:
 
 
 def month_options() -> List[str]:
-    months = {snapshot.get("dataYm") for snapshot in all_snapshots() if snapshot.get("dataYm")}
+    ensure_dirs()
+    months = {
+        match.group("ym")
+        for path in SNAPSHOT_DIR.glob("*.json")
+        for match in [re.match(r"(?:listed|otc)_(?P<ym>\d{6})\.json$", path.name)]
+        if match
+    }
     end = current_query_month_yyyymm()
     end_year = int(end[:4])
     end_month = int(end[4:6])
@@ -328,10 +331,10 @@ def sync_summary_month(yyyymm: str) -> dict:
                     if row.get("industry")
                 }
                 if not industry_by_id:
-                    for snapshot in sorted(all_snapshots(), key=lambda item: item.get("dataYm", ""), reverse=True):
-                        for latest_row in snapshot.get("rows", []):
-                            if latest_row.get("market") == market and latest_row.get("industry"):
-                                industry_by_id.setdefault(latest_row["companyId"], latest_row["industry"])
+                    latest_snapshot = latest_snapshot_for_market(market)
+                    for latest_row in (latest_snapshot or {}).get("rows", []):
+                        if latest_row.get("industry"):
+                            industry_by_id.setdefault(latest_row["companyId"], latest_row["industry"])
                 for row in rows:
                     row["industry"] = industry_by_id.get(row["companyId"], row.get("industry", ""))
                 save_snapshot(market, rows, partial=yyyymm >= current_query_month_yyyymm())
@@ -476,10 +479,6 @@ def save_snapshot(market: str, rows: List[dict], raw_content: Optional[bytes] = 
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
-    with SNAPSHOT_CACHE_LOCK:
-        SNAPSHOT_FILE_CACHE.clear()
-        SNAPSHOT_ALL_CACHE["signature"] = None
-        SNAPSHOT_ALL_CACHE["snapshots"] = []
     return data_ym
 
 
@@ -539,37 +538,22 @@ def sync_once() -> dict:
 
 def load_snapshot(path: Path) -> Optional[dict]:
     try:
-        stat = path.stat()
-        key = str(path)
-        signature = (stat.st_mtime_ns, stat.st_size)
-        with SNAPSHOT_CACHE_LOCK:
-            cached = SNAPSHOT_FILE_CACHE.get(key)
-            if cached and cached.get("signature") == signature:
-                return cached.get("payload")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        with SNAPSHOT_CACHE_LOCK:
-            SNAPSHOT_FILE_CACHE[key] = {"signature": signature, "payload": payload}
-        return payload
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
 
 
-def all_snapshots() -> List[dict]:
+def iter_snapshots(reverse: bool = False) -> Iterable[dict]:
     ensure_dirs()
-    files = sorted(SNAPSHOT_DIR.glob("*.json"))
-    signature = tuple((str(path), path.stat().st_mtime_ns, path.stat().st_size) for path in files)
-    with SNAPSHOT_CACHE_LOCK:
-        if SNAPSHOT_ALL_CACHE["signature"] == signature:
-            return list(SNAPSHOT_ALL_CACHE["snapshots"])
-    snapshots: List[dict] = []
-    for path in files:
+    for path in sorted(SNAPSHOT_DIR.glob("*.json"), reverse=reverse):
         payload = load_snapshot(path)
         if payload:
-            snapshots.append(payload)
-    with SNAPSHOT_CACHE_LOCK:
-        SNAPSHOT_ALL_CACHE["signature"] = signature
-        SNAPSHOT_ALL_CACHE["snapshots"] = snapshots
-    return snapshots
+            yield payload
+
+
+def snapshot_count() -> int:
+    ensure_dirs()
+    return sum(1 for _ in SNAPSHOT_DIR.glob("*.json"))
 
 
 def snapshots_for_month(yyyymm: str) -> Dict[str, dict]:
@@ -581,13 +565,20 @@ def snapshots_for_month(yyyymm: str) -> Dict[str, dict]:
     return found
 
 
+def latest_snapshot_for_market(market: str) -> Optional[dict]:
+    paths = sorted(SNAPSHOT_DIR.glob(f"{market}_*.json"), reverse=True)
+    for path in paths:
+        payload = load_snapshot(path)
+        if payload:
+            return payload
+    return None
+
+
 def latest_snapshots_by_market() -> Dict[str, dict]:
     latest: Dict[str, dict] = {}
-    for snapshot in all_snapshots():
-        market = snapshot.get("market")
-        if not market:
-            continue
-        if market not in latest or snapshot.get("dataYm", "") > latest[market].get("dataYm", ""):
+    for market in MARKETS:
+        snapshot = latest_snapshot_for_market(market)
+        if snapshot:
             latest[market] = snapshot
     return latest
 
@@ -643,8 +634,7 @@ def history_stats_by_company(snapshots: Iterable[dict], current_ym: str, years: 
 
 
 def annotate_highs(rows: List[dict], yyyymm: str, years: int = 10) -> List[dict]:
-    snapshots = all_snapshots()
-    history_stats = history_stats_by_company(snapshots, yyyymm, years)
+    history_stats = history_stats_by_company(iter_snapshots(), yyyymm, years)
     annotated: List[dict] = []
     for row in rows:
         stats = history_stats.get((row["market"], row["companyId"]))
@@ -799,7 +789,7 @@ def revenue_payload(yyyymm: Optional[str], mode: str = "all", years: int = 10) -
         "historyComplete": not bool(missing_history),
         "historyMissingMonths": len(missing_history),
         "months": [{"value": item, "label": ad_to_display(item)} for item in month_options()],
-        "snapshotCount": len(all_snapshots()),
+        "snapshotCount": snapshot_count(),
         "companyCount": len(rows),
         "allCompanyCount": sum(len(snapshot.get("rows", [])) for snapshot in snapshots.values()),
         "highCount": high_count,
