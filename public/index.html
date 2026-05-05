@@ -182,10 +182,11 @@
       function render(payload) {
         state.payload = payload;
         state.rows = payload.rows || [];
+        const mode = document.getElementById("modeSelect").value;
         document.getElementById("selectedMonth").textContent = payload.selectedMonthDisplay || "-";
         document.getElementById("companyCount").textContent = money(payload.allCompanyCount);
         document.getElementById("filteredCount").textContent = money((payload.rows || []).length);
-        document.getElementById("highCount").textContent = payload.historyComplete ? money(payload.highCount) : "\u540c\u6b65\u4e2d";
+        document.getElementById("highCount").textContent = payload.historyComplete ? money(payload.highCount) : (mode === "highs" ? "\u540c\u6b65\u4e2d" : "-");
         document.getElementById("snapshotCount").textContent = `${money(payload.snapshotCount)} \u4efd`;
         populateMonths(payload.months || [], payload.selectedMonth);
         populateIndustries(state.rows);
@@ -194,7 +195,7 @@
         if (payload.syncing) parts.push("\u9019\u500b\u6708\u4efd\u6b63\u5728\u80cc\u666f\u540c\u6b65\uff0c\u8868\u683c\u6703\u5148\u986f\u793a\u76ee\u524d\u5df2\u6293\u5230\u7684\u516c\u53f8\u3002");
         if (payload.historySyncing) parts.push("\u8fd1 10 \u5e74\u6b77\u53f2\u6708\u4efd\u6b63\u5728\u80cc\u666f\u88dc\u9f4a\uff0c\u65b0\u9ad8\u7d50\u679c\u6703\u81ea\u52d5\u66f4\u65b0\u3002");
         if (payload.partial) parts.push(text.partial);
-        if (payload.historyMissingMonths > 0) parts.push(text.historyWeak);
+        if (mode === "highs" && payload.historyMissingMonths > 0) parts.push(text.historyWeak);
         setNotice(parts.join(" ") || `\u5df2\u8f09\u5165 ${payload.selectedMonthDisplay} \u6708\u71df\u6536\uff0c\u5171 ${payload.allCompanyCount} \u5bb6\u516c\u53f8\u3002`, parts.length ? "warn" : "ok");
         if (state.refreshTimer) clearTimeout(state.refreshTimer);
         if (payload.syncing || payload.historySyncing) {
@@ -218,6 +219,10 @@
         const response = await fetch(`/api/revenues?${params}`, { signal: state.controller.signal });
         if (!response.ok) throw new Error("\u8cc7\u6599\u8b80\u53d6\u5931\u6557");
         const payload = await response.json();
+        const currentMonth = document.getElementById("monthSelect").value;
+        const currentMode = document.getElementById("modeSelect").value;
+        if ((month && currentMonth !== month) || currentMode !== mode) return;
+        if (month && payload.selectedMonth !== month) return;
         if (requestId === state.requestId) render(payload);
       }
 

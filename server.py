@@ -752,9 +752,9 @@ def revenue_payload(yyyymm: Optional[str], mode: str = "all", years: int = 10) -
 
     history_result = None
     missing_history = missing_rolling_history_months(yyyymm, years) if rows else []
-    if rows:
+    if mode == "highs" and rows:
         history_result = start_history_sync(yyyymm, years)
-    if missing_history:
+    if mode == "highs" and missing_history:
         rows = [
             {
                 **row,
@@ -766,7 +766,7 @@ def revenue_payload(yyyymm: Optional[str], mode: str = "all", years: int = 10) -
             }
             for row in rows
         ]
-    else:
+    elif not missing_history:
         rows = annotate_highs(rows, yyyymm, years)
     high_count = sum(1 for row in rows if row.get("isNewHigh"))
     if mode == "highs":
