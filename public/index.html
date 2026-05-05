@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>&#21488;&#32929;&#26376;&#29151;&#25910;&#26597;&#35426;</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">TWSE / TPEx Revenue Monitor</p>
+        <h1>&#21488;&#32929;&#26376;&#29151;&#25910;&#26597;&#35426;</h1>
+      </div>
+      <div class="actions">
+        <button id="syncButton" type="button">&#21516;&#27493;&#23448;&#26041;&#36039;&#26009;</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="status-grid">
+        <article>
+          <span>&#26597;&#35426;&#26376;&#20221;</span>
+          <strong id="selectedMonth">-</strong>
+        </article>
+        <article>
+          <span>&#24050;&#20844;&#21578;&#20844;&#21496;</span>
+          <strong id="companyCount">-</strong>
+        </article>
+        <article>
+          <span>&#31641;&#36984;&#32080;&#26524;</span>
+          <strong id="filteredCount">-</strong>
+        </article>
+        <article>
+          <span>&#36817; 10 &#24180;&#21934;&#26376;&#26032;&#39640;</span>
+          <strong id="highCount">-</strong>
+        </article>
+        <article>
+          <span>&#24050;&#20445;&#23384;&#24555;&#29031;</span>
+          <strong id="snapshotCount">-</strong>
+        </article>
+      </section>
+
+      <section class="toolbar">
+        <label>
+          &#26376;&#20221;
+          <select id="monthSelect"></select>
+        </label>
+        <label>
+          &#21151;&#33021;
+          <select id="modeSelect">
+            <option value="all">&#26597;&#35426;&#25152;&#26377;&#29151;&#25910;</option>
+            <option value="highs">&#21482;&#30475;&#36817; 10 &#24180;&#21934;&#26376;&#26032;&#39640;</option>
+          </select>
+        </label>
+        <label>
+          &#24066;&#22580;
+          <select id="marketFilter">
+            <option value="">&#20840;&#37096;</option>
+            <option value="listed">&#19978;&#24066;</option>
+            <option value="otc">&#19978;&#27331;</option>
+          </select>
+        </label>
+        <label>
+          &#29986;&#26989;
+          <select id="industryFilter">
+            <option value="">&#20840;&#37096;</option>
+          </select>
+        </label>
+        <label>
+          &#25628;&#23563;
+          <input id="searchInput" type="search" placeholder="&#20195;&#34399;&#25110;&#20844;&#21496;&#21517;&#31281;" />
+        </label>
+      </section>
+
+      <section class="notice" id="notice">&#27491;&#22312;&#36617;&#20837;&#36039;&#26009;&#12290;</section>
+
+      <section class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="rank">&#24207;</th>
+              <th>&#24066;&#22580;</th>
+              <th>&#20195;&#34399;</th>
+              <th>&#20844;&#21496;</th>
+              <th>&#29986;&#26989;</th>
+              <th>&#26376;&#20221;</th>
+              <th class="num">&#30070;&#26376;&#29151;&#25910;</th>
+              <th class="num">&#19978;&#26376;&#29151;&#25910;</th>
+              <th class="num">&#21435;&#24180;&#21516;&#26376;</th>
+              <th class="num">&#24180;&#22686;&#29575;</th>
+              <th class="num">10 &#24180;&#21934;&#26376;&#26368;&#39640;</th>
+              <th>&#26032;&#39640;</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </section>
+    </main>
+
+    <script>
+      const state = { rows: [], payload: null, requestId: 0, controller: null };
+      const fmt = new Intl.NumberFormat("zh-TW");
+      const text = {
+        all: "\u67e5\u8a62\u6240\u6709\u71df\u6536",
+        loading: "\u6b63\u5728\u8f09\u5165\u8cc7\u6599\u3002",
+        syncing: "\u6b63\u5728\u540c\u6b65\u5b98\u65b9\u8cc7\u6599\u3002",
+        noRows: "\u76ee\u524d\u6c92\u6709\u7b26\u5408\u689d\u4ef6\u7684\u516c\u53f8\u3002",
+        partial: "\u9019\u500b\u6708\u4efd\u662f\u5373\u6642\u9010\u516c\u53f8\u67e5\u8a62\u7684\u90e8\u5206\u5feb\u7167\uff0c\u53ea\u986f\u793a\u5df2\u5728\u516c\u958b\u8cc7\u8a0a\u89c0\u6e2c\u7ad9\u516c\u544a\u7684\u516c\u53f8\u3002",
+        historyWeak: "\u8fd1 10 \u5e74\u55ae\u6708\u65b0\u9ad8\u9700\u8981\u904e\u53bb 120 \u500b\u6708\u5feb\u7167\uff1b\u76ee\u524d\u6b77\u53f2\u5c1a\u4e0d\u5b8c\u6574\uff0c\u65b0\u9ad8\u7d50\u679c\u53ef\u80fd\u504f\u591a\u6216\u504f\u5c11\u3002"
+      };
+
+      function money(value) {
+        if (value === null || value === undefined) return "-";
+        return fmt.format(value);
+      }
+
+      function pct(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return "-";
+        return `${num.toFixed(2)}%`;
+      }
+
+      function setNotice(message, tone = "") {
+        const notice = document.getElementById("notice");
+        notice.textContent = message;
+        notice.dataset.tone = tone;
+      }
+
+      function populateMonths(months, selected) {
+        const select = document.getElementById("monthSelect");
+        const existing = select.value;
+        select.innerHTML = months.map((item) => `<option value="${item.value}">${item.label}</option>`).join("");
+        select.value = selected || existing || (months[0] && months[0].value) || "";
+      }
+
+      function populateIndustries(rows) {
+        const select = document.getElementById("industryFilter");
+        const current = select.value;
+        const industries = [...new Set(rows.map((row) => row.industry).filter(Boolean))].sort();
+        select.innerHTML = '<option value="">&#20840;&#37096;</option>' + industries.map((name) => `<option value="${name}">${name}</option>`).join("");
+        select.value = industries.includes(current) ? current : "";
+      }
+
+      function filteredRows() {
+        const market = document.getElementById("marketFilter").value;
+        const industry = document.getElementById("industryFilter").value;
+        const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
+        return state.rows.filter((row) => {
+          if (market && row.market !== market) return false;
+          if (industry && row.industry !== industry) return false;
+          if (keyword && !`${row.companyId} ${row.companyName}`.toLowerCase().includes(keyword)) return false;
+          return true;
+        });
+      }
+
+      function renderTable() {
+        const body = document.getElementById("resultBody");
+        const rows = filteredRows();
+        body.innerHTML = rows.map((row, index) => `
+          <tr>
+            <td class="rank">${index + 1}</td>
+            <td><span class="pill">${row.marketLabel}</span></td>
+            <td>${row.companyId}</td>
+            <td class="name">${row.companyName}</td>
+            <td>${row.industry || "-"}</td>
+            <td>${row.dataYmDisplay}</td>
+            <td class="num strong">${money(row.monthlyRevenue)}</td>
+            <td class="num">${money(row.previousMonthRevenue)}</td>
+            <td class="num">${money(row.lastYearMonthRevenue)}</td>
+            <td class="num">${pct(row.yoyPct)}</td>
+            <td class="num">${money(row.historicalSameMonthMax)}</td>
+            <td>${row.isNewHigh ? '<span class="badge">&#26032;&#39640;</span>' : '-'}</td>
+          </tr>
+        `).join("");
+        document.getElementById("filteredCount").textContent = money(rows.length);
+        if (!rows.length) {
+          body.innerHTML = `<tr><td colspan="12" class="empty">${text.noRows}</td></tr>`;
+        }
+      }
+
+      function render(payload) {
+        state.payload = payload;
+        state.rows = payload.rows || [];
+        document.getElementById("selectedMonth").textContent = payload.selectedMonthDisplay || "-";
+        document.getElementById("companyCount").textContent = money(payload.allCompanyCount);
+        document.getElementById("filteredCount").textContent = money((payload.rows || []).length);
+        document.getElementById("highCount").textContent = money(payload.highCount);
+        document.getElementById("snapshotCount").textContent = `${money(payload.snapshotCount)} \u4efd`;
+        populateMonths(payload.months || [], payload.selectedMonth);
+        populateIndustries(state.rows);
+        renderTable();
+        const parts = [];
+        if (payload.syncing) parts.push("\u9019\u500b\u6708\u4efd\u6b63\u5728\u80cc\u666f\u540c\u6b65\uff0c\u8868\u683c\u6703\u5148\u986f\u793a\u76ee\u524d\u5df2\u6293\u5230\u7684\u516c\u53f8\u3002");
+        if (payload.historySyncing) parts.push("\u8fd1 10 \u5e74\u6b77\u53f2\u6708\u4efd\u6b63\u5728\u80cc\u666f\u88dc\u9f4a\uff0c\u65b0\u9ad8\u7d50\u679c\u6703\u81ea\u52d5\u66f4\u65b0\u3002");
+        if (payload.partial) parts.push(text.partial);
+        if (payload.historyMissingMonths > 0) parts.push(text.historyWeak);
+        setNotice(parts.join(" ") || `\u5df2\u8f09\u5165 ${payload.selectedMonthDisplay} \u6708\u71df\u6536\uff0c\u5171 ${payload.allCompanyCount} \u5bb6\u516c\u53f8\u3002`, parts.length ? "warn" : "ok");
+      }
+
+      async function loadRevenues() {
+        const requestId = ++state.requestId;
+        if (state.controller) state.controller.abort();
+        state.controller = new AbortController();
+        setNotice(text.loading);
+        const month = document.getElementById("monthSelect").value;
+        const mode = document.getElementById("modeSelect").value;
+        const params = new URLSearchParams({ mode, years: "10" });
+        if (month) params.set("month", month);
+        const response = await fetch(`/api/revenues?${params}`, { signal: state.controller.signal });
+        if (!response.ok) throw new Error("\u8cc7\u6599\u8b80\u53d6\u5931\u6557");
+        const payload = await response.json();
+        if (requestId === state.requestId) render(payload);
+      }
+
+      async function syncNow() {
+        const button = document.getElementById("syncButton");
+        button.disabled = true;
+        button.textContent = "\u540c\u6b65\u4e2d";
+        setNotice(text.syncing);
+        try {
+          const month = document.getElementById("monthSelect").value;
+          await fetch("/api/sync", { method: "POST" });
+          if (month) await fetch(`/api/sync-month?month=${encodeURIComponent(month)}&force=1`, { method: "POST" });
+          await loadRevenues();
+        } catch (error) {
+          setNotice(error.message, "error");
+        } finally {
+          button.disabled = false;
+          button.textContent = "\u540c\u6b65\u5b98\u65b9\u8cc7\u6599";
+        }
+      }
+
+      function safeLoadRevenues() {
+        loadRevenues().catch((error) => {
+          if (error.name !== "AbortError") setNotice(error.message, "error");
+        });
+      }
+
+      document.getElementById("syncButton").addEventListener("click", syncNow);
+      document.getElementById("monthSelect").addEventListener("change", safeLoadRevenues);
+      document.getElementById("modeSelect").addEventListener("change", safeLoadRevenues);
+      document.getElementById("marketFilter").addEventListener("change", renderTable);
+      document.getElementById("industryFilter").addEventListener("change", renderTable);
+      document.getElementById("searchInput").addEventListener("input", renderTable);
+
+      safeLoadRevenues();
+      setInterval(safeLoadRevenues, 60000);
+    </script>
+  </body>
+</html>

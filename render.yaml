@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: taiwan-revenue-monitor
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    disk:
+      name: revenue-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8088
+      - key: REVENUE_DATA_DIR
+        value: /app/data
+      - key: REVENUE_SYNC_SECONDS
+        value: 10800
