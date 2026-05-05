@@ -761,9 +761,23 @@ def revenue_payload(yyyymm: Optional[str], mode: str = "all", years: int = 10) -
         rows.extend(snapshot.get("rows", []))
 
     history_result = None
-    if mode == "highs" and rows:
+    missing_history = missing_rolling_history_months(yyyymm, years) if rows else []
+    if rows:
         history_result = start_history_sync(yyyymm, years)
-    rows = annotate_highs(rows, yyyymm, years)
+    if missing_history:
+        rows = [
+            {
+                **row,
+                "historicalSameMonthCount": 0,
+                "historicalSameMonthMax": None,
+                "historicalSameMonthMaxYm": None,
+                "revenueGap": None,
+                "isNewHigh": False,
+            }
+            for row in rows
+        ]
+    else:
+        rows = annotate_highs(rows, yyyymm, years)
     high_count = sum(1 for row in rows if row.get("isNewHigh"))
     if mode == "highs":
         rows = [row for row in rows if row.get("isNewHigh")]
@@ -782,7 +796,8 @@ def revenue_payload(yyyymm: Optional[str], mode: str = "all", years: int = 10) -
         "syncState": partial_sync_state(yyyymm),
         "historySync": history_result,
         "historySyncing": bool(history_sync_state(yyyymm, years).get("running")),
-        "historyMissingMonths": len(missing_rolling_history_months(yyyymm, years)) if mode == "highs" else 0,
+        "historyComplete": not bool(missing_history),
+        "historyMissingMonths": len(missing_history),
         "months": [{"value": item, "label": ad_to_display(item)} for item in month_options()],
         "snapshotCount": len(all_snapshots()),
         "companyCount": len(rows),

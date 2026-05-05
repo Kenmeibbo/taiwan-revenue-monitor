@@ -43,7 +43,7 @@ Environment variables:
 - OTC monthly revenue CSV: `https://mopsfin.twse.com.tw/opendata/t187ap05_O.csv`
 - Historical/monthly summary HTML: `https://mopsov.twse.com.tw/nas/t21/...`
 
-Snapshots are saved under `data/snapshots`. In cloud deployment, mount persistent storage at the configured data directory.
+Snapshots are saved under `data/snapshots`. A persistent disk is recommended for production, but the included Render configuration uses the free plan without a disk.
 
 ## Docker
 
@@ -54,4 +54,4 @@ docker run -p 8088:8088 -e HOST=0.0.0.0 -v revenue-data:/app/data taiwan-revenue
 
 ## Render
 
-This repository includes `render.yaml`. Create a Render Blueprint from the GitHub repository. Render will create a Docker web service and mount a persistent disk at `/app/data`.
+This repository includes `render.yaml`. Create a Render Blueprint from the GitHub repository to run a free Docker web service. On Render Free, cache files are rebuilt after restarts, redeploys, or cold starts.
