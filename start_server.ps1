@@ -27,14 +27,17 @@ try {
     $version = (Get-FileHash -LiteralPath $serverFile -Algorithm SHA256).Hash.ToLowerInvariant()
     $health = Read-Health
     if ($health -and $health.app -eq 'taiwan-revenue-monitor' -and $health.serverVersion -ne $version) {
-        $listener = Get-NetTCPConnection -LocalPort 8088 -State Listen |
-            Where-Object { $_.OwningProcess -eq $health.processId }
+        $listener = netstat.exe -ano -p tcp | Where-Object {
+            $_ -match '^\s*TCP\s+(?:127\.0\.0\.1|0\.0\.0\.0):8088\s+\S+\s+LISTENING\s+(\d+)\s*$' -and
+            [int]$Matches[1] -eq [int]$health.processId
+        }
         $process = Get-Process -Id $health.processId -ErrorAction SilentlyContinue
         if (-not $listener -or -not $process -or $process.ProcessName -notmatch '^python(w)?$') {
             throw 'Cannot verify the existing server process. Please close it before restarting.'
         }
-        Stop-Process -Id $process.Id
-        $process.WaitForExit(5000) | Out-Null
+        $oldProcessId = $process.Id
+        Stop-Process -Id $oldProcessId -Force
+        Wait-Process -Id $oldProcessId -Timeout 5 -ErrorAction SilentlyContinue
         $health = $null
     }
     if (-not $health -or $health.app -ne 'taiwan-revenue-monitor') {
@@ -80,6 +83,7 @@ try {
     if (-not $NoBrowser) { Start-Process $url }
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host $_.InvocationInfo.PositionMessage
     exit 1
 } finally {
     if ($locked) { $mutex.ReleaseMutex() }
