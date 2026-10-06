@@ -13,7 +13,13 @@
         <h1>&#21488;&#32929;&#26376;&#29151;&#25910;&#26597;&#35426;</h1>
       </div>
       <div class="actions">
+        <button id="pdfButton" type="button" disabled>
+          <!-- Lucide Download (ISC/MIT): see lucide.LICENSE.txt. -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>
+          &#19979;&#36617; PDF
+        </button>
         <button id="syncButton" type="button">&#21516;&#27493;&#23448;&#26041;&#36039;&#26009;</button>
+        <span id="pdfStatus" role="status" aria-live="polite"></span>
       </div>
     </header>
 
@@ -98,8 +104,10 @@
       </section>
     </main>
 
+    <script src="/jspdf.umd.min.js"></script>
+    <script src="/revenue-pdf.js"></script>
     <script>
-      const state = { rows: [], payload: null, requestId: 0, controller: null, refreshTimer: null };
+      const state = { rows: [], payload: null, requestId: 0, controller: null, refreshTimer: null, loading: true, exporting: false, failed: false };
       const fmt = new Intl.NumberFormat("zh-TW");
       const text = {
         all: "\u67e5\u8a62\u6240\u6709\u71df\u6536",
@@ -177,6 +185,41 @@
         if (!rows.length) {
           body.innerHTML = `<tr><td colspan="12" class="empty">${text.noRows}</td></tr>`;
         }
+        updatePdfButton();
+      }
+
+      function updatePdfButton() {
+        const payload = state.payload;
+        const matches = payload && payload.selectedMonth === document.getElementById("monthSelect").value
+          && payload.mode === document.getElementById("modeSelect").value;
+        document.getElementById("pdfButton").disabled = state.loading || state.failed || state.exporting
+          || !matches || !filteredRows().length || (payload.mode === "highs" && !payload.historyComplete);
+      }
+
+      async function downloadPdf() {
+        updatePdfButton();
+        if (document.getElementById("pdfButton").disabled) return;
+        const report = {
+          payload: { ...state.payload },
+          rows: filteredRows().map((row) => ({ ...row })),
+          filters: ["modeSelect", "marketFilter", "industryFilter"].map((id) =>
+            document.getElementById(id).selectedOptions[0].textContent),
+          keyword: document.getElementById("searchInput").value.trim(),
+          exportedAt: new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei", hour12: false }),
+        };
+        state.exporting = true;
+        updatePdfButton();
+        const status = document.getElementById("pdfStatus");
+        try {
+          if (!window.RevenuePdf || !window.jspdf) throw new Error("PDF \u5957\u4ef6\u8f09\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u6574\u7406\u5f8c\u518d\u8a66\u3002");
+          await window.RevenuePdf.download(report, (message) => { status.textContent = message; });
+          status.textContent = "PDF \u5df2\u7522\u751f\uff0c\u8acb\u67e5\u770b\u700f\u89bd\u5668\u4e0b\u8f09\u3002";
+        } catch (error) {
+          status.textContent = error.message;
+        } finally {
+          state.exporting = false;
+          updatePdfButton();
+        }
       }
 
       function render(payload) {
@@ -209,6 +252,9 @@
           state.refreshTimer = null;
         }
         const requestId = ++state.requestId;
+        state.loading = true;
+        state.failed = false;
+        updatePdfButton();
         if (state.controller) state.controller.abort();
         state.controller = new AbortController();
         setNotice(text.loading);
@@ -216,14 +262,24 @@
         const mode = document.getElementById("modeSelect").value;
         const params = new URLSearchParams({ mode, years: "10" });
         if (month) params.set("month", month);
-        const response = await fetch(`/api/revenues?${params}`, { signal: state.controller.signal });
-        if (!response.ok) throw new Error("\u8cc7\u6599\u8b80\u53d6\u5931\u6557");
-        const payload = await response.json();
-        const currentMonth = document.getElementById("monthSelect").value;
-        const currentMode = document.getElementById("modeSelect").value;
-        if ((month && currentMonth !== month) || currentMode !== mode) return;
-        if (month && payload.selectedMonth !== month) return;
-        if (requestId === state.requestId) render(payload);
+        try {
+          const response = await fetch(`/api/revenues?${params}`, { signal: state.controller.signal });
+          if (!response.ok) throw new Error("\u8cc7\u6599\u8b80\u53d6\u5931\u6557");
+          const payload = await response.json();
+          const currentMonth = document.getElementById("monthSelect").value;
+          const currentMode = document.getElementById("modeSelect").value;
+          if ((month && currentMonth !== month) || currentMode !== mode) return;
+          if (month && payload.selectedMonth !== month) return;
+          if (requestId === state.requestId) render(payload);
+        } catch (error) {
+          if (requestId === state.requestId) state.failed = true;
+          throw error;
+        } finally {
+          if (requestId === state.requestId) {
+            state.loading = false;
+            updatePdfButton();
+          }
+        }
       }
 
       async function syncNow() {
@@ -251,6 +307,7 @@
       }
 
       document.getElementById("syncButton").addEventListener("click", syncNow);
+      document.getElementById("pdfButton").addEventListener("click", downloadPdf);
       document.getElementById("monthSelect").addEventListener("change", safeLoadRevenues);
       document.getElementById("modeSelect").addEventListener("change", safeLoadRevenues);
       document.getElementById("marketFilter").addEventListener("change", renderTable);
@@ -262,3 +319,4 @@
     </script>
   </body>
 </html>
+

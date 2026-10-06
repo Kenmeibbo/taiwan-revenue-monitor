@@ -79,6 +79,29 @@ button:disabled {
   opacity: 0.7;
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+#pdfButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+#pdfStatus {
+  flex-basis: 100%;
+  max-width: 360px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 main {
   width: min(1440px, 100%);
   margin: 0 auto;
@@ -257,3 +280,4 @@ tr:last-child td {
     grid-template-columns: 1fr;
   }
 }
+

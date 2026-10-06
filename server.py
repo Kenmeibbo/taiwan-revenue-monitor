@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import json
 import os
@@ -17,6 +18,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
+SERVER_VERSION = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 PUBLIC_DIR = ROOT / "public"
 DATA_DIR = Path(os.environ.get("REVENUE_DATA_DIR", str(ROOT / "data"))).resolve()
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
@@ -810,7 +812,12 @@ def static_response(handler: BaseHTTPRequestHandler, path: Path) -> None:
     if not path.exists() or not path.is_file():
         handler.send_error(404)
         return
-    content_type = "text/html; charset=utf-8" if path.suffix == ".html" else "text/css; charset=utf-8"
+    content_type = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".txt": "text/plain; charset=utf-8",
+    }.get(path.suffix, "application/octet-stream")
     body = path.read_bytes()
     handler.send_response(200)
     handler.send_header("Content-Type", content_type)
@@ -826,6 +833,9 @@ class RevenueHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
+        if parsed.path == "/api/health":
+            json_response(self, {"app": "taiwan-revenue-monitor", "serverVersion": SERVER_VERSION, "processId": os.getpid()})
+            return
         if parsed.path == "/api/status":
             json_response(self, read_status())
             return
@@ -887,3 +897,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

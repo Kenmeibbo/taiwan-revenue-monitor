@@ -5,12 +5,15 @@ Local/cloud web app for querying monthly revenue of Taiwan listed and OTC compan
 Core features:
 
 - Query monthly revenue by month, market, industry, stock code, or company name.
+- Download the currently filtered rows as a paginated A4 landscape PDF with Chinese labels, filter details, timestamps, and data completeness notes. The browser renders each page as an image (text is not selectable); no PDF work runs on Render. Downloads are disabled while loading, for empty results, and for unverified high results.
 - Show companies whose selected month revenue is a new high against the previous 10 years of all monthly revenue.
 - Sync latest official MOPS open-data CSV.
 - Fetch historical monthly revenue summary pages from MOPS old site and cache snapshots.
 - Supports Docker deployment with persistent data storage.
 
 ## Run Locally
+
+On Windows, double-click `start.bat`. It finds Python 3, starts the local server in the background, waits until it is ready, and opens the browser. Repeated clicks reuse the running server. Logs are written to `server.out.log` and `server.err.log`. An older server without the health endpoint must be stopped once before using this launcher.
 
 ```powershell
 python server.py
@@ -55,3 +58,4 @@ docker run -p 8088:8088 -e HOST=0.0.0.0 -v revenue-data:/app/data taiwan-revenue
 ## Render
 
 This repository includes `render.yaml`. Create a Render Blueprint from the GitHub repository to run a free Docker web service. On Render Free, cache files are rebuilt after restarts, redeploys, or cold starts.
+
