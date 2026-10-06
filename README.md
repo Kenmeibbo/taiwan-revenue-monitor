@@ -59,3 +59,7 @@ docker run -p 8088:8088 -e HOST=0.0.0.0 -v revenue-data:/app/data taiwan-revenue
 
 This repository includes `render.yaml`. Create a Render Blueprint from the GitHub repository to run a free Docker web service. On Render Free, cache files are rebuilt after restarts, redeploys, or cold starts.
 
+## Sites Cloud Version
+
+`zhewei_TWstock_monthly_high_tracker` is hosted at https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site. It uses a persistent cloud database for historical revenue and browser-based PDF downloads. The cloud source is maintained in a separate Sites repository; local `start.bat` and the Python server continue to work independently.
+
