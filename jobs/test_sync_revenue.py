@@ -6,11 +6,19 @@ from sync_revenue import eligible, checkpoint
 
 class SchedulerTest(unittest.TestCase):
     def test_policy(self):
-        policy = {"timezone": "Asia/Taipei", "hours": [8, 11, 14, 17, 20, 23], "allowed": False}
+        policy = {"timezone": "Asia/Taipei", "intervalMinutes": 5,"allDay": True,"allowed": False}
         self.assertFalse(eligible(policy))
         policy["allowed"] = True
         self.assertTrue(eligible(policy))
         policy["timezone"] = "UTC"
+        with self.assertRaises(RuntimeError):
+            eligible(policy)
+        policy["timezone"] = "Asia/Taipei"
+        policy["intervalMinutes"] = 3
+        with self.assertRaises(RuntimeError):
+            eligible(policy)
+        policy["intervalMinutes"] = 5
+        policy["allDay"] = False
         with self.assertRaises(RuntimeError):
             eligible(policy)
 

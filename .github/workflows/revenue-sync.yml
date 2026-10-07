@@ -2,8 +2,8 @@ name: Revenue cache sync (no AI)
 
 on:
   schedule:
-    # UTC -> Asia/Taipei: 08,11,14,17,20,23. The API checks allowed dates.
-    - cron: '0 0,3,6,9,12,15 * * *'
+    # Every five minutes, 24/7. The API checks calendar dates in Asia/Taipei.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     paths:

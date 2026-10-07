@@ -1,13 +1,11 @@
 """Update the public Sites cache without invoking an AI model."""
 import argparse
 import json
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 SITE = "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site"
-TAIPEI = timezone(timedelta(hours=8))
 
 
 def request_json(path, method="GET"):
@@ -26,7 +24,7 @@ def request_json(path, method="GET"):
 
 
 def eligible(policy):
-    if policy.get("timezone") != "Asia/Taipei" or policy.get("hours") != [8, 11, 14, 17, 20, 23]:
+    if policy.get("timezone") != "Asia/Taipei" or policy.get("intervalMinutes") != 5 or policy.get("allDay") is not True:
         raise RuntimeError("Unexpected collection policy; refuse to update")
     return policy.get("allowed") is True
 
@@ -51,10 +49,6 @@ def main():
     parser.add_argument("--check", action="store_true", help="Check deployment/policy without writing data")
     parser.add_argument("--checkpoint", default=".github/revenue-sync-status.json")
     args = parser.parse_args()
-    # No overnight network call, even if manually dispatched from GitHub.
-    if not args.check and datetime.now(TAIPEI).hour not in [8, 11, 14, 17, 20, 23]:
-        print(json.dumps({"skipped": True, "reason": "outside-hour"}))
-        return
     policy_result = request_json("/api/scheduled-refresh")
     allowed = eligible(policy_result["policy"])
     if args.check or not allowed:
