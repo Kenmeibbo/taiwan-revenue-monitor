@@ -1,0 +1,45 @@
+name: Official price history (no AI)
+
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/price-history.yml'
+      - 'cloud_jobs/**'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: official-price-history
+  cancel-in-progress: false
+
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+      - run: python3 -m unittest discover -s cloud_jobs -p 'test_*.py' -v
+      - name: Collect and publish bounded monthly batches
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          for batch in $(seq 1 10); do
+            python3 cloud_jobs/history_prices.py --limit 12
+            if test -d cloud-data; then
+              git add cloud-data
+              if git diff --cached --quiet; then break; fi
+              git commit -m "Cache official historical monthly closing prices"
+              git pull --rebase origin main
+              git push origin HEAD:main
+            else
+              break
+            fi
+          done
+
