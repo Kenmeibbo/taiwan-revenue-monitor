@@ -1,10 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
-from sync_revenue import eligible, checkpoint
+from sync_revenue import eligible, checkpoint, pending_reports
 
 
 class SchedulerTest(unittest.TestCase):
+    def test_pending_reports(self):
+        capture={"results":[{"month":"202609","live":{"updated":30,"pending":100}}]}
+        self.assertEqual(pending_reports(capture),100)
+        self.assertEqual(pending_reports({"skipped":True,"previous":capture}),100)
     def test_policy(self):
         policy = {"timezone": "Asia/Taipei", "intervalMinutes": 5,"allDay": True,"allowed": False}
         self.assertFalse(eligible(policy))

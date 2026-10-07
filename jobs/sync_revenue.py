@@ -1,6 +1,7 @@
 """Update the public Sites cache without invoking an AI model."""
 import argparse
 import json
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -17,7 +18,10 @@ def request_json(path, method="GET"):
             return json.load(response)
     except HTTPError as error:
         try:
-            detail = json.loads(error.read()).get("errors")
+            result = json.loads(error.read())
+            if isinstance(result, dict) and result.get("state") == "complete" and result.get("results"):
+                return result
+            detail = result.get("errors")
         except (ValueError, AttributeError):
             detail = None
         raise RuntimeError(f"Site returned HTTP {error.code}: {detail or error.reason}") from error
@@ -44,6 +48,29 @@ def checkpoint(result, path):
     target.write_text(json.dumps(receipt, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
+def pending_reports(result):
+    capture = result.get("previous", result) if result.get("skipped") else result
+    for item in capture.get("results", []):
+        if "live" in item:
+            return item["live"].get("pending", 0)
+    return 0
+
+
+def live_progress(result):
+    capture = result.get("previous", result) if result.get("skipped") else result
+    return next((item["live"] for item in capture.get("results", []) if "live" in item), {})
+
+
+def refresh():
+    started = time.monotonic()
+    result = request_json("/api/scheduled-refresh", "POST")
+    for _ in range(14):
+        if result.get("reason") == "running" or pending_reports(result) == 0 or time.monotonic() - started > 300 or (not result.get("skipped") and live_progress(result).get("updated") == 0):
+            break
+        result = request_json("/api/scheduled-refresh?drain=1", "POST")
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="Check deployment/policy without writing data")
@@ -54,7 +81,7 @@ def main():
     if args.check or not allowed:
         print(json.dumps(policy_result, ensure_ascii=True))
         return
-    result = request_json("/api/scheduled-refresh", "POST")
+    result = refresh()
     if result.get("errors"):
         raise RuntimeError("Official source update failed: " + str(result["errors"]))
     print(json.dumps(result, ensure_ascii=True))
