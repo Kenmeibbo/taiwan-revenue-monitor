@@ -1,0 +1,21 @@
+{
+  "month": "202610",
+  "site": "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site",
+  "completedAt": "2026-10-07T05:54:16.942Z",
+  "slot": "20261007-13-50",
+  "results": [
+    {
+      "month": "202609",
+      "markets": {
+        "listed": 199,
+        "otc": 156
+      },
+      "errors": []
+    },
+    {
+      "month": "202608",
+      "skipped": true,
+      "errors": []
+    }
+  ]
+}
