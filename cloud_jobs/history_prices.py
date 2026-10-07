@@ -3,10 +3,12 @@ import argparse
 import calendar
 from datetime import date, datetime, timedelta, timezone
 import json
+import gzip
+from http.client import IncompleteRead
 from pathlib import Path
 import re
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 SITE = "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site"
@@ -20,12 +22,19 @@ def fetch(url, delay=1.5):
         time.sleep(max(0, delay - (time.monotonic() - LAST_REQUEST)))
         LAST_REQUEST = time.monotonic()
         try:
-            with urlopen(Request(url, headers={"Accept": "application/json", "User-Agent": "ZheweiOfficialHistory/1.0"}), timeout=30) as response:
-                return json.load(response)
+            with urlopen(Request(url, headers={"Accept": "application/json", "Accept-Encoding": "gzip", "User-Agent": "ZheweiOfficialHistory/1.0"}), timeout=30) as response:
+                content = response.read()
+                if response.headers.get("Content-Encoding") == "gzip":
+                    content = gzip.decompress(content)
+                return json.loads(content.decode("utf-8-sig"))
         except HTTPError as error:
             if error.code != 429 or attempt == 2:
                 raise
             time.sleep(max(30, min(120, int(error.headers.get("Retry-After", "30")))))
+        except (IncompleteRead, URLError, TimeoutError, ConnectionError, json.JSONDecodeError):
+            if attempt == 2:
+                raise
+            time.sleep(5 * (attempt + 1))
     raise RuntimeError("Official history unavailable")
 
 
@@ -99,7 +108,6 @@ def collect(limit=12):
         return 0
     now = datetime.now(timezone(timedelta(hours=8)))
     end = now.year * 12 + now.month - 1
-    profiles()
     count = 0
     for offset in range(120):
         index = end - offset
@@ -118,6 +126,10 @@ def collect(limit=12):
         count += 1
         if count >= limit:
             break
+    try:
+        profiles()
+    except (IncompleteRead, URLError, TimeoutError, ConnectionError, ValueError) as error:
+        print("Company profile lookup postponed: " + str(error), flush=True)
     return count
 
 
