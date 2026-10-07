@@ -1,0 +1,55 @@
+name: Revenue cache sync (no AI)
+
+on:
+  schedule:
+    # UTC -> Asia/Taipei: 08,11,14,17,20,23. The API checks allowed dates.
+    - cron: '0 0,3,6,9,12,15 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/revenue-sync.yml'
+      - 'jobs/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: revenue-cache-sync
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s jobs -p 'test_*.py' -v
+      - run: python3 jobs/sync_revenue.py --check
+
+  sync:
+    if: github.event_name != 'push'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: main
+      - run: python3 jobs/sync_revenue.py
+      # A real monthly receipt keeps the public repository's scheduler active.
+      - name: Save monthly synchronization receipt
+        shell: bash
+        run: |
+          if test -f .github/revenue-sync-status.json; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add .github/revenue-sync-status.json
+            if ! git diff --cached --quiet; then
+              git commit -m "Record successful monthly revenue synchronization"
+              git push origin HEAD:main
+            fi
+          fi
