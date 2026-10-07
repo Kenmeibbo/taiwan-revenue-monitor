@@ -32,6 +32,12 @@ class MarketParsing(unittest.TestCase):
         self.assertNotIn("9999", quotes)
         self.assertNotIn("8888", quotes)
 
+    def test_emerging_average_uses_real_trading_day_and_is_not_labelled_close(self):
+        body={"stat":"ok","tables":[{"fields":["日期","成交均價","成交均價"],"data":[["114/09/30","0","0"],["114/09/29","0","52.00"]]}]}
+        quote=module.individual_quote(body,"202509","official",True)
+        self.assertEqual(quote["date"],"2025-09-29")
+        self.assertEqual(quote["basis"],"esb_external_average")
+
 
 if __name__ == "__main__":
     unittest.main()
