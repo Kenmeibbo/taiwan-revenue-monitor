@@ -16,13 +16,16 @@ ROOT = Path(__file__).resolve().parents[1] / "cloud-data"
 LAST_REQUEST = 0.0
 
 
-def fetch(url, delay=1.5):
+def fetch(url, delay=1.5, body=None):
     global LAST_REQUEST
     for attempt in range(3):
         time.sleep(max(0, delay - (time.monotonic() - LAST_REQUEST)))
         LAST_REQUEST = time.monotonic()
         try:
-            with urlopen(Request(url, headers={"Accept": "application/json", "Accept-Encoding": "gzip", "User-Agent": "ZheweiOfficialHistory/1.0"}), timeout=30) as response:
+            headers={"Accept": "application/json", "Accept-Encoding": "gzip", "User-Agent": "ZheweiOfficialHistory/1.0"}
+            if body is not None:
+                headers["Content-Type"]="application/json"
+            with urlopen(Request(url, data=json.dumps(body).encode() if body is not None else None, headers=headers), timeout=30) as response:
                 content = response.read()
                 if response.headers.get("Content-Encoding") == "gzip":
                     content = gzip.decompress(content)
@@ -101,6 +104,90 @@ def profiles():
     write_json(target, {"version": 1, "companies": companies})
 
 
+def individual_quote(body, ym, source, emerging=False):
+    if re.search("沒有符合條件的資料", str(body.get("stat", ""))):
+        return None
+    if str(body.get("stat", "")).lower() != "ok":
+        raise ValueError("Official individual quote unavailable")
+    table = body.get("tables", [body])[0]
+    fields = [re.sub(r"\s", "", field) for field in table.get("fields", [])]
+    name = "成交均價" if emerging else "收盤價" if "收盤價" in fields else "收盤"
+    index = fields.index(name)
+    quotes=[]
+    for row in table.get("data", []):
+        parts=str(row[0]).split("/")
+        day=date(int(parts[0])+(1911 if int(parts[0])<1911 else 0),int(parts[1]),int(parts[2]))
+        if day.strftime("%Y%m") != ym:
+            raise ValueError("Individual price month mismatch")
+        value=str(row[index]).replace(",", "").strip()
+        basis="esb_average" if emerging else "close"
+        if emerging and (not re.fullmatch(r"\d+(?:\.\d+)?",value) or float(value)<=0):
+            second=next((i for i,field in enumerate(fields) if i>index and field=="成交均價"),None)
+            if second is not None:
+                value=str(row[second]).replace(",", "").strip();basis="esb_external_average"
+        if re.fullmatch(r"\d+(?:\.\d+)?", value) and float(value)>0:
+            quotes.append({"price":float(value),"date":day.isoformat(),"basis":basis,"source":source})
+    return max(quotes,key=lambda quote:quote["date"]) if quotes else None
+
+
+def supplemental():
+    try:
+        requests=fetch(SITE+"/api/history-requests").get("requests", [])
+    except HTTPError as error:
+        if error.code==404:
+            return
+        raise
+    companies=json.loads((ROOT/"profiles.json").read_text(encoding="utf-8")).get("companies",{}) if (ROOT/"profiles.json").exists() else {}
+    for request in requests[:4]:
+        code,market,end=request.get("code",""),request.get("market",""),request.get("end","")
+        if not re.fullmatch(r"\d{4}",code) or market not in ["listed","otc"] or not re.fullmatch(r"\d{6}",end):
+            continue
+        target=ROOT/"companies"/(code+".json")
+        extra=json.loads(target.read_text(encoding="utf-8")) if target.exists() else {"version":1,"code":code,"quotes":{},"absent":[],"revenues":{},"revenueAbsent":[]}
+        checked=0
+        end_index=int(end[:4])*12+int(end[4:])
+        for offset in range(120):
+            index=end_index-offset;ym=f"{(index-1)//12:04d}{(index-1)%12+1:02d}"
+            if ym < companies.get(code,"000000"):
+                continue
+            pack=ROOT/"markets"/(ym+".json")
+            covered=pack.exists() and code in json.loads(pack.read_text(encoding="utf-8"))["quotes"]
+            price_needed=not covered and ym not in extra["quotes"] and ym not in extra["absent"]
+            revenue_needed=ym in request.get("months",[]) and ym not in extra["revenues"] and ym not in extra["revenueAbsent"]
+            if not price_needed and not revenue_needed:
+                continue
+            if price_needed:
+                date_query=ym[:4]+"/"+ym[4:]+"/01"
+                urls={"listed":f"https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={ym}01&stockNo={code}","otc":f"https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock?code={code}&date={date_query}&response=json"}
+                quote=None
+                for kind in [market,"otc" if market=="listed" else "listed"]:
+                    quote=individual_quote(fetch(urls[kind]),ym,urls[kind])
+                    if quote:
+                        break
+                if not quote:
+                    url=f"https://www.tpex.org.tw/www/zh-tw/emerging/historical?type=Monthly&code={code}&date={date_query}&response=json"
+                    quote=individual_quote(fetch(url),ym,url,True)
+                if quote:
+                    extra["quotes"][ym]=quote
+                else:
+                    extra["absent"].append(ym)
+            if revenue_needed:
+                result=fetch("https://mops.twse.com.tw/mops/api/t05st10_ifrs",body={"companyId":code,"dataType":"2","year":str(int(ym[:4])-1911),"month":str(int(ym[4:])),"subsidiaryCompanyId":""})
+                if result.get("code")==406:
+                    extra["revenueAbsent"].append(ym)
+                elif result.get("code")==200 and result.get("result",{}).get("yymm")==str(int(ym[:4])-1911).zfill(3)+ym[4:]:
+                    if any(row[0]=="本月" for row in result["result"].get("data",[])):
+                        extra["revenues"][ym]=result
+                else:
+                    raise ValueError("Supplemental monthly revenue unavailable")
+            checked+=1
+            if checked>=6:
+                break
+        if checked:
+            write_json(target,extra)
+            print(f"Supplemented {code}: {checked} official monthly checks",flush=True)
+
+
 def collect(limit=12):
     policy = fetch(SITE + "/api/scheduled-refresh")
     if policy.get("policy", {}).get("allowed") is not True:
@@ -130,6 +217,7 @@ def collect(limit=12):
         profiles()
     except (IncompleteRead, URLError, TimeoutError, ConnectionError, ValueError) as error:
         print("Company profile lookup postponed: " + str(error), flush=True)
+    supplemental()
     return count
 
 
