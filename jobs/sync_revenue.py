@@ -25,7 +25,7 @@ def write_job_summary(result):
     import os
     capture = captured_result(result)
     deferred = deferred_reports(result)
-    state = "running" if result.get("reason") == "running" else "partial" if deferred else "up-to-date"
+    state = "running" if result.get("reason") == "running" else "partial" if deferred or pending_reports(result) else "up-to-date"
     print(json.dumps({"dataStatus": state, "deferred": deferred}, ensure_ascii=True))
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
@@ -69,7 +69,7 @@ def checkpoint(result, path):
         return
     month = captured["policy"]["date"][:6]
     target = Path(path)
-    data_status = "partial" if deferred_reports(result) else "up-to-date"
+    data_status = "partial" if deferred_reports(result) or pending_reports(result) else "up-to-date"
     if target.exists():
         previous = json.loads(target.read_text(encoding="utf-8"))
         if previous.get("month") == month and previous.get("dataStatus", "up-to-date") == data_status:
