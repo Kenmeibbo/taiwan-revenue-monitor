@@ -1,14 +1,27 @@
 {
   "month": "202610",
   "site": "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site",
-  "completedAt": "2026-10-07T05:54:16.942Z",
-  "slot": "20261007-13-50",
+  "completedAt": "2026-10-08T06:50:23.385Z",
+  "slot": "20261008-14-50",
   "results": [
+    {
+      "announcements": {
+        "errors": []
+      }
+    },
+    {
+      "month": "202609",
+      "archive": {
+        "skipped": true,
+        "found": 0,
+        "errors": []
+      }
+    },
     {
       "month": "202609",
       "markets": {
-        "listed": 199,
-        "otc": 156
+        "listed": 525,
+        "otc": 420
       },
       "errors": []
     },
@@ -16,6 +29,57 @@
       "month": "202608",
       "skipped": true,
       "errors": []
+    },
+    {
+      "month": "202609",
+      "live": {
+        "updated": 0,
+        "pending": 5,
+        "errors": [],
+        "deferred": [
+          {
+            "companyId": "2330",
+            "market": "listed",
+            "ym": "202609",
+            "reason": "official_report_pending",
+            "message": "\u5b98\u65b9\u500b\u5225\u67e5\u8a62\u5c1a\u7121\u5c0d\u61c9\u6708\u4efd\u8cc7\u6599",
+            "nextRetryAt": "2026-10-08T06:50:50.924Z"
+          },
+          {
+            "companyId": "2880",
+            "market": "listed",
+            "ym": "202609",
+            "reason": "financial_summary_pending",
+            "message": "\u5b98\u65b9\u6bcd\u516c\u53f8\u5f59\u7e3d\u71df\u6536\u5c1a\u5f85\u6838\u5be6",
+            "nextRetryAt": "2026-10-08T06:51:22.959Z"
+          },
+          {
+            "companyId": "2887",
+            "market": "listed",
+            "ym": "202609",
+            "reason": "financial_summary_pending",
+            "message": "\u5b98\u65b9\u6bcd\u516c\u53f8\u5f59\u7e3d\u71df\u6536\u5c1a\u5f85\u6838\u5be6",
+            "nextRetryAt": "2026-10-08T06:51:22.959Z"
+          },
+          {
+            "companyId": "5880",
+            "market": "listed",
+            "ym": "202609",
+            "reason": "financial_summary_pending",
+            "message": "\u5b98\u65b9\u6bcd\u516c\u53f8\u5f59\u7e3d\u71df\u6536\u5c1a\u5f85\u6838\u5be6",
+            "nextRetryAt": "2026-10-08T06:51:22.959Z"
+          },
+          {
+            "companyId": "3003",
+            "market": "listed",
+            "ym": "202609",
+            "reason": "official_report_pending",
+            "message": "\u5b98\u65b9\u500b\u5225\u67e5\u8a62\u5c1a\u7121\u5c0d\u61c9\u6708\u4efd\u8cc7\u6599",
+            "nextRetryAt": "2026-10-08T06:51:22.050Z"
+          }
+        ]
+      }
     }
-  ]
+  ],
+  "dataStatus": "partial"
 }
