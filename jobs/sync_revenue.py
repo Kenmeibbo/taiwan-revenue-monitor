@@ -9,6 +9,35 @@ from urllib.request import Request, urlopen
 SITE = "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site"
 
 
+def captured_result(result):
+    return result.get("previous", result) if result.get("skipped") else result
+
+
+def deferred_reports(result):
+    capture = captured_result(result)
+    if "deferred" in capture:
+        return capture["deferred"]
+    return [report for item in capture.get("results", []) for report in item.get("live", {}).get("deferred", [])]
+
+
+def write_job_summary(result):
+    """Report partial coverage without treating unavailable company reports as a system outage."""
+    import os
+    capture = captured_result(result)
+    deferred = deferred_reports(result)
+    state = "running" if result.get("reason") == "running" else "partial" if deferred else "up-to-date"
+    print(json.dumps({"dataStatus": state, "deferred": deferred}, ensure_ascii=True))
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        lines = ["## Revenue synchronization", "", "Data coverage: " + state,
+                 "Last check: " + str(capture.get("completedAt", "unknown"))]
+        if deferred:
+            lines += ["", "The following official reports remain pending; stored data was retained:"]
+            lines += ["- " + item["companyId"] + ": " + item["reason"] for item in deferred]
+        with Path(summary_path).open("a", encoding="utf-8") as stream:
+            stream.write("\n".join(lines) + "\n")
+
+
 def request_json(path, method="GET"):
     request = Request(SITE + path, data=b"" if method == "POST" else None,
                       method=method, headers={"Accept": "application/json",
@@ -35,15 +64,18 @@ def eligible(policy):
 
 def checkpoint(result, path):
     """Save one genuine successful synchronization receipt per calendar month."""
-    captured = result.get("previous", result) if result.get("skipped") else result
+    captured = captured_result(result)
     if captured.get("state") != "complete" or captured.get("errors"):
         return
     month = captured["policy"]["date"][:6]
     target = Path(path)
-    if target.exists() and json.loads(target.read_text(encoding="utf-8")).get("month") == month:
-        return
+    data_status = "partial" if deferred_reports(result) else "up-to-date"
+    if target.exists():
+        previous = json.loads(target.read_text(encoding="utf-8"))
+        if previous.get("month") == month and previous.get("dataStatus", "up-to-date") == data_status:
+            return
     receipt = {"month": month, "site": SITE, "completedAt": captured["completedAt"],
-               "slot": captured["policy"]["slot"], "results": captured["results"]}
+               "slot": captured["policy"]["slot"], "results": captured["results"], "dataStatus": data_status}
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(receipt, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
@@ -82,9 +114,11 @@ def main():
         print(json.dumps(policy_result, ensure_ascii=True))
         return
     result = refresh()
-    if result.get("errors"):
-        raise RuntimeError("Official source update failed: " + str(result["errors"]))
+    capture = captured_result(result)
+    if capture.get("errors"):
+        raise RuntimeError("Official source update failed: " + str(capture["errors"]))
     print(json.dumps(result, ensure_ascii=True))
+    write_job_summary(result)
     checkpoint(result, args.checkpoint)
 
 
@@ -93,3 +127,4 @@ if __name__ == "__main__":
         main()
     except (RuntimeError, URLError, ValueError, KeyError) as error:
         raise SystemExit(str(error)) from error
+
