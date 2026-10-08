@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from sync_revenue import eligible, checkpoint, pending_reports
+from sync_revenue import eligible, checkpoint, pending_reports, deferred_reports
 
 
 class SchedulerTest(unittest.TestCase):
@@ -9,6 +9,18 @@ class SchedulerTest(unittest.TestCase):
         capture={"results":[{"month":"202609","live":{"updated":30,"pending":100}}]}
         self.assertEqual(pending_reports(capture),100)
         self.assertEqual(pending_reports({"skipped":True,"previous":capture}),100)
+
+    def test_expected_deferred_reports_are_visible_and_partial_receipt_upgrades_when_resolved(self):
+        reports=[{"companyId":"2880","reason":"financial_summary_pending"}]
+        result={"state":"complete","policy":{"date":"20261008","slot":"20261008-10-00"},"completedAt":"2026-10-08T02:00:00Z","results":[],"errors":[],"deferred":reports}
+        self.assertEqual(deferred_reports({"skipped":True,"previous":result}),reports)
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"receipt.json"
+            checkpoint(result,path)
+            self.assertIn('"dataStatus": "partial"',path.read_text())
+            result["deferred"]=[]
+            checkpoint(result,path)
+            self.assertIn('"dataStatus": "up-to-date"',path.read_text())
     def test_policy(self):
         policy = {"timezone": "Asia/Taipei", "intervalMinutes": 5,"allDay": True,"allowed": False}
         self.assertFalse(eligible(policy))
@@ -47,3 +59,4 @@ class SchedulerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
