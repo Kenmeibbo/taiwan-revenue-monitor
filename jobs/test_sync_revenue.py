@@ -1,10 +1,26 @@
 import tempfile
 import unittest
 from pathlib import Path
-from sync_revenue import eligible, checkpoint, pending_reports, deferred_reports
+from sync_revenue import eligible, checkpoint, pending_reports, deferred_reports, data_status
 
 
 class SchedulerTest(unittest.TestCase):
+    def test_pending_summary_is_partial_but_real_failures_remain_errors(self):
+        capture={"state":"complete","policy":{"date":"20261102","slot":"20261102-10-35"},
+                 "completedAt":"2026-11-02T02:35:00Z","results":[],"errors":[],
+                 "dataStatus":"partial","pendingSources":[{"market":"otc","ym":"202610"}]}
+        self.assertEqual(data_status(capture),"partial")
+        self.assertEqual(data_status({"skipped":True,"previous":capture}),"partial")
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"receipt.json"
+            checkpoint(capture,path)
+            first=path.read_text()
+            self.assertIn('"dataStatus": "partial"',first)
+            capture["errors"]=["official HTTP 429"]
+            self.assertEqual(data_status(capture),"error")
+            checkpoint(capture,path)
+            self.assertEqual(path.read_text(),first)
+
     def test_pending_reports(self):
         capture={"results":[{"month":"202609","live":{"updated":30,"pending":100}}]}
         self.assertEqual(pending_reports(capture),100)
