@@ -20,12 +20,23 @@ def deferred_reports(result):
     return [report for item in capture.get("results", []) for report in item.get("live", {}).get("deferred", [])]
 
 
+def data_status(result):
+    capture = captured_result(result)
+    if capture.get("errors"):
+        return "error"
+    if result.get("reason") == "running":
+        return "running"
+    if capture.get("dataStatus") == "partial" or capture.get("pendingSources") or deferred_reports(result) or pending_reports(result):
+        return "partial"
+    return "up-to-date"
+
+
 def write_job_summary(result):
     """Report partial coverage without treating unavailable company reports as a system outage."""
     import os
     capture = captured_result(result)
     deferred = deferred_reports(result)
-    state = "running" if result.get("reason") == "running" else "partial" if deferred or pending_reports(result) else "up-to-date"
+    state = data_status(result)
     print(json.dumps({"dataStatus": state, "deferred": deferred}, ensure_ascii=True))
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
@@ -34,6 +45,8 @@ def write_job_summary(result):
         if deferred:
             lines += ["", "The following official reports remain pending; stored data was retained:"]
             lines += ["- " + item["companyId"] + ": " + item["reason"] for item in deferred]
+        for source in capture.get("pendingSources", []):
+            lines += ["- " + source["market"] + " " + source["ym"] + ": official monthly summary pending; verified data retained"]
         with Path(summary_path).open("a", encoding="utf-8") as stream:
             stream.write("\n".join(lines) + "\n")
 
@@ -69,13 +82,13 @@ def checkpoint(result, path):
         return
     month = captured["policy"]["date"][:6]
     target = Path(path)
-    data_status = "partial" if deferred_reports(result) or pending_reports(result) else "up-to-date"
+    status = data_status(result)
     if target.exists():
         previous = json.loads(target.read_text(encoding="utf-8"))
-        if previous.get("month") == month and previous.get("dataStatus", "up-to-date") == data_status:
+        if previous.get("month") == month and previous.get("dataStatus", "up-to-date") == status:
             return
     receipt = {"month": month, "site": SITE, "completedAt": captured["completedAt"],
-               "slot": captured["policy"]["slot"], "results": captured["results"], "dataStatus": data_status}
+               "slot": captured["policy"]["slot"], "results": captured["results"], "dataStatus": status}
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(receipt, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
