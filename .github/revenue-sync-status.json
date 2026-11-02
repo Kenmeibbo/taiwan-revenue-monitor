@@ -1,8 +1,8 @@
 {
   "month": "202611",
   "site": "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site",
-  "completedAt": "2026-11-02T02:47:03.481Z",
-  "slot": "20261102-10-45",
+  "completedAt": "2026-11-02T09:54:02.172Z",
+  "slot": "20261102-17-50",
   "results": [
     {
       "announcements": {
@@ -12,25 +12,18 @@
     {
       "month": "202610",
       "archive": {
-        "skipped": true,
-        "found": 0,
+        "found": 3,
         "errors": []
       }
     },
     {
       "month": "202610",
       "markets": {
-        "listed": 1
+        "listed": 6,
+        "otc": 5
       },
       "errors": [],
-      "pendingSources": [
-        {
-          "market": "otc",
-          "ym": "202610",
-          "source": "https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_115_10.html",
-          "reason": "summary_pending"
-        }
-      ]
+      "pendingSources": []
     },
     {
       "month": "202609",
@@ -40,12 +33,12 @@
     {
       "month": "202610",
       "live": {
-        "updated": 0,
+        "updated": 12,
         "pending": 0,
         "errors": [],
         "deferred": []
       }
     }
   ],
-  "dataStatus": "partial"
+  "dataStatus": "up-to-date"
 }
