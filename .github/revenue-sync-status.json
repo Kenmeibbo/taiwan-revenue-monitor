@@ -1,8 +1,8 @@
 {
   "month": "202611",
   "site": "https://zhewei-twstock-monthly-high-tracker.skywei.chatgpt.site",
-  "completedAt": "2026-11-02T09:54:02.172Z",
-  "slot": "20261102-17-50",
+  "completedAt": "2026-11-05T11:26:33.026Z",
+  "slot": "20261105-19-25",
   "results": [
     {
       "announcements": {
@@ -12,15 +12,15 @@
     {
       "month": "202610",
       "archive": {
-        "found": 3,
+        "found": 15,
         "errors": []
       }
     },
     {
       "month": "202610",
       "markets": {
-        "listed": 6,
-        "otc": 5
+        "listed": 160,
+        "otc": 126
       },
       "errors": [],
       "pendingSources": []
@@ -33,12 +33,21 @@
     {
       "month": "202610",
       "live": {
-        "updated": 12,
-        "pending": 0,
+        "updated": 0,
+        "pending": 1,
         "errors": [],
-        "deferred": []
+        "deferred": [
+          {
+            "companyId": "3003",
+            "market": "listed",
+            "ym": "202610",
+            "reason": "official_report_pending",
+            "message": "\u5b98\u65b9\u500b\u5225\u67e5\u8a62\u5c1a\u7121\u5c0d\u61c9\u6708\u4efd\u8cc7\u6599",
+            "nextRetryAt": "2026-11-05T11:31:03.245Z"
+          }
+        ]
       }
     }
   ],
-  "dataStatus": "up-to-date"
+  "dataStatus": "partial"
 }
